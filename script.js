@@ -5,15 +5,15 @@ const { Renderer, Stave, Formatter, Voice, StaveNote } = Vex.Flow;
 let context, stave;
 
 // Secuencia de notas a practicar (Do4, Re4, Mi4, Fa4, Sol4)
-// VexFlow Notación: nota/octava
 const NOTE_SEQUENCE_STRINGS = [
     "C/4", "D/4", "E/4", "F/4", "G/4", "F/4", "E/4", "D/4", "C/4"
 ];
 
 // Almacenamiento de notas y controles
-let vexFlowNotes = [];
 let synth = null;
+let audioContext = null; // Contexto de Audio nativo
 let pitchDetector = null; // Objeto de ml5.pitchDetection
+let micStream = null;
 
 // Lógica de juego
 let currentNoteIndex = 0;
@@ -49,20 +49,16 @@ function updateFeedback(message, isCorrect = null) {
 function frequencyToNote(frequency) {
     if (frequency < 10) return null; // Frecuencias muy bajas son ruido
 
-    const A4 = 440;
-    const C0 = 16.35; // Frecuencia de C0
-    const semitonesFromC0 = 12 * Math.log2(frequency / C0);
+    const C0_FREQ = 16.35; // Frecuencia de C0
+    const semitonesFromC0 = 12 * Math.log2(frequency / C0_FREQ);
     const noteIndex = Math.round(semitonesFromC0);
     
     const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     const noteName = noteNames[noteIndex % 12];
     const octave = Math.floor(noteIndex / 12);
     
-    // Simplificar las notas con sostenidos a sus equivalentes naturales si es posible (C# -> C, D# -> D, etc. para la comparación)
-    // El objetivo es solo saber si está en la nota principal
-    let cleanNoteName = noteName.replace('#', '');
-    
-    return cleanNoteName + octave;
+    // Retorna la nota natural y la octava (ej: C4, D4, etc.)
+    return noteName.replace('#', '') + octave;
 }
 
 
@@ -95,7 +91,7 @@ function drawStave() {
 // 2. REPRODUCCIÓN (TONE.JS)
 // =======================================================
 async function playSequence() {
-    // Iniciar el contexto de audio (requerido por Tone.js)
+    // Asegurarse de que el Contexto de Audio esté iniciado y funcionando antes de reproducir
     if (Tone.context.state !== 'running') {
         await Tone.start();
     }
@@ -107,20 +103,17 @@ async function playSequence() {
     updateFeedback('Reproduciendo secuencia...');
 
     let time = Tone.now();
-    const duration = '0.4'; // Duración de cada nota
-    const spacing = 0.1; // Pequeño espacio entre notas
+    const duration = '0.4'; 
+    const spacing = 0.1; 
 
     vexFlowNotes.forEach(note => {
-        // Tone.js usa C4, D4, E4...
         const noteName = note.keys[0].replace('/', ''); 
         
         synth.triggerAttackRelease(noteName, duration, time);
         
-        // Avanzar el tiempo para la siguiente nota
         time += Tone.Time(duration).toSeconds() + spacing; 
     });
 
-    // Re-habilitar el botón de comparación después de que termine
     setTimeout(() => {
         updateFeedback('Listo para Iniciar Comparación. ¡Canta la secuencia!');
     }, time * 1000); 
@@ -130,26 +123,35 @@ async function playSequence() {
 // 3. RECONOCIMIENTO DE TONO (ML5.JS)
 // =======================================================
 async function startMicrophone() {
-    try {
-        updateFeedback('Cargando modelo de tono...');
-        
-        // Usar ml5.js para el acceso al micrófono y detección de tono
-        // Usamos la API nativa de audio para alimentar ml5
-        const audioContext = new AudioContext();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const micStream = audioContext.createMediaStreamSource(stream);
+    // 1. Garantizar que el AudioContext nativo esté creado y activo (CRUCIAL EN MÓVILES)
+    if (!audioContext) {
+        audioContext = new AudioContext();
+    }
+    if (audioContext.state !== 'running') {
+        await audioContext.resume();
+    }
+    
+    updateFeedback('Cargando modelo de tono...');
+    startMicBtn.disabled = true;
 
-        // Cargar el modelo de detección de tono (basado en Autocorrelación)
-        pitchDetector = ml5.pitchDetection('model/crepe', audioContext, micStream, () => {
+    try {
+        // 2. Obtener el flujo de audio del micrófono
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = audioContext.createMediaStreamSource(stream);
+
+        // 3. Cargar el modelo de detección de tono (usando el modelo hosteado por ml5)
+        const modelPath = 'https://cdn.jsdelivr.net/gh/ml5js/ml5-data@master/models/pitch/crepe';
+        
+        pitchDetector = ml5.pitchDetection(modelPath, audioContext, micStream, () => {
             updateFeedback('🎤 Micrófono conectado. Modelo cargado. Listo para empezar.');
-            startMicBtn.disabled = true;
             playBtn.disabled = false;
             startMatchBtn.disabled = false;
         });
 
     } catch (error) {
+        // Si falla, el error es probablemente de permiso/hardware.
         console.error("Error al acceder al micrófono:", error);
-        updateFeedback('❌ Error al acceder al micrófono. Asegúrate de dar permiso y usar HTTPS.', false);
+        updateFeedback('❌ Error al acceder al micrófono. Verifica los permisos del navegador.', false);
         startMicBtn.disabled = false;
     }
 }
@@ -169,6 +171,7 @@ function startMatching() {
     updateFeedback(`¡Comienza a cantar! Canta la primera nota: ${NOTE_SEQUENCE_STRINGS[0].replace('/', '')}`);
 
     // Iniciar el ciclo de comparación
+    if (intervalId) clearInterval(intervalId);
     intervalId = setInterval(checkPitch, CHECK_INTERVAL);
 }
 
@@ -183,8 +186,9 @@ function checkPitch() {
     }
 
     // 1. Obtener la nota objetivo
-    const targetNoteStr = NOTE_SEQUENCE_STRINGS[currentNoteIndex].replace('/', ''); 
-
+    const targetNoteStr = NOTE_SEQUENCE_STRINGS[currentNoteIndex]; // C/4
+    const cleanTarget = targetNoteStr.replace('/', ''); // C4
+    
     // 2. Obtener la frecuencia detectada
     pitchDetector.getPitch((err, frequency) => {
         if (err) {
@@ -193,28 +197,26 @@ function checkPitch() {
         }
 
         if (frequency) {
-            // 3. Convertir frecuencia a nota y limpiar el nombre (ignorando sostenidos para simplificar)
+            // 3. Convertir frecuencia a nota
             const detectedNote = frequencyToNote(frequency);
-            const cleanDetected = detectedNote.replace('#', '');
-            const cleanTarget = targetNoteStr.replace('#', '');
             
-            // 4. Comparar (solo la nota y la octava)
-            if (cleanDetected === cleanTarget) {
-                // Correcto: pasar a la siguiente nota después de un pequeño retraso
-                updateFeedback(`✅ En la nota: ${targetNoteStr}. ¡Bien!`);
+            // 4. Comparar
+            if (detectedNote === cleanTarget) {
+                // Correcto: pasar a la siguiente nota
+                
                 currentNoteIndex++;
                 if (currentNoteIndex < NOTE_SEQUENCE_STRINGS.length) {
                     // Muestra la siguiente nota a cantar
-                    updateFeedback(`✅ Correcto. Siguiente: ${NOTE_SEQUENCE_STRINGS[currentNoteIndex].replace('/', '')}`, true);
+                    const nextNote = NOTE_SEQUENCE_STRINGS[currentNoteIndex].replace('/', '');
+                    updateFeedback(`✅ En la nota: ${cleanTarget}. Siguiente: ${nextNote}`, true);
                 }
                 
             } else {
                 // Incorrecto
-                updateFeedback(`❌ Objetivo: ${targetNoteStr}. Detectado: ${detectedNote}. Intenta de nuevo.`, false);
+                updateFeedback(`❌ Objetivo: ${cleanTarget}. Detectado: ${detectedNote || 'Silencio/Ruido'}.`, false);
             }
         } else {
-             // Silencio o ruido
-             updateFeedback(`Objetivo: ${targetNoteStr}. 🔇 Esperando tu canto...`);
+             // Silencio o ruido (no hacer nada para no interrumpir el flujo)
         }
     });
 }
@@ -224,14 +226,10 @@ function checkPitch() {
 // =======================================================
 document.addEventListener('DOMContentLoaded', () => {
     drawStave();
+    
+    // El listener principal que inicia todo
     startMicBtn.addEventListener('click', startMicrophone);
+    
     playBtn.addEventListener('click', playSequence);
     startMatchBtn.addEventListener('click', startMatching);
-
-    // Inicializa el contexto de audio al interactuar con el botón
-    startMicBtn.addEventListener('click', async () => {
-        if (Tone.context.state !== 'running') {
-            await Tone.start();
-        }
-    });
 });
