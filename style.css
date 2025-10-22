@@ -1,0 +1,84 @@
+body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    background-color: #f0f4f8; 
+    padding: 20px; 
+    margin: 0;
+}
+.container { 
+    background-color: white; 
+    padding: 25px; 
+    border-radius: 12px; 
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); 
+    max-width: 800px; 
+    width: 95%; 
+}
+h1 { 
+    color: #2c3e50; 
+    margin-bottom: 20px; 
+    text-align: center; 
+}
+/* Estilos de botones */
+button { 
+    background-color: #3498db; 
+    color: white; 
+    padding: 10px 20px; 
+    border: none; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    transition: background-color 0.3s; 
+    margin: 5px; 
+    font-weight: bold;
+    flex-grow: 1; /* Para que ocupen el espacio disponible */
+}
+button:hover { 
+    background-color: #2980b9; 
+}
+button:disabled { 
+    background-color: #bdc3c7; 
+    cursor: not-allowed; 
+}
+/* Área de Feedback */
+#output-feedback { 
+    margin-top: 15px; 
+    padding: 15px; 
+    border-radius: 8px; 
+    font-size: 1.2em; 
+    text-align: center; 
+    min-height: 40px; 
+    font-weight: 600;
+}
+.feedback-correct { 
+    background-color: #e6ffe6; 
+    color: #27ae60; 
+    border: 1px solid #2ecc71; 
+}
+.feedback-incorrect { 
+    background-color: #ffe6e6; 
+    color: #c0392b; 
+    border: 1px solid #e74c3c; 
+}
+/* Controles y Pentagrama */
+#controls { 
+    display: flex; 
+    flex-wrap: wrap; /* Permite que los botones se envuelvan en pantallas pequeñas */
+    justify-content: center; 
+    margin-bottom: 20px; 
+    gap: 10px;
+}
+#pentagram-area { 
+    border: 1px solid #ddd; 
+    margin-top: 20px; 
+    background-color: #fff; 
+    border-radius: 8px; 
+    overflow: hidden; 
+}
+/* Hacer los botones más pequeños en pantallas muy estrechas */
+@media (max-width: 500px) {
+    button {
+        padding: 8px 15px;
+        font-size: 0.9em;
+    }
+}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrenador de Canto Interactivo</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.3/build/cjs/vexflow.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.min.js"></script>
+
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script> 
+</head>
+<body>
+
+    <div class="container">
+        <h1>🎹 Entrenador de Canto 🎤</h1>
+        
+        <div id="controls">
+            <button id="start-mic-btn">1. Conectar Micrófono</button>
+            <button id="play-btn" disabled>2. Reproducir Pentagrama</button>
+            <button id="start-match-btn" disabled>3. Iniciar Comparación</button>
+        </div>
+
+        <div id="output-feedback">Estado: Esperando conexión.</div>
+
+        <div id="pentagram-area"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
